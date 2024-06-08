@@ -2,6 +2,8 @@ package br.com.alurafood.pagamentos.controller;
 
 import br.com.alurafood.pagamentos.dto.PagamentoDto;
 import br.com.alurafood.pagamentos.service.PagamentoService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +19,7 @@ import java.net.URI;
 
 
 @RestController
-@RequestMapping("/pagamentos")
+    @RequestMapping("/pagamentos")
 public class PagamentoController {
 
     @Autowired
@@ -57,6 +59,16 @@ public class PagamentoController {
     @GetMapping("/porta")
     public String retornaPorta(@Value("${local.server.port}") String porta){
         return String.format("Requisição respondida pela instância executando na porta %s", porta);
+    }
+
+    @CircuitBreaker(name = "atualizaPedido", fallbackMethod = "pagamentoAutorizadoComIntegracaoPendente")
+    @PatchMapping("/{id}/confirmar")
+    public void confirmarPagamento(@PathVariable @NotNull Long id){
+        service.confirmarPagamento(id);
+    }
+
+    public void pagamentoAutorizadoComIntegracaoPendente(Long id, Exception e){
+        service.alteraStatus(id);
     }
 
 }
