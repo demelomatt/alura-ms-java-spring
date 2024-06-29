@@ -12,6 +12,8 @@ import software.amazon.awscdk.services.rds.*;
 import software.constructs.Construct;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 // import software.amazon.awscdk.Duration;
 // import software.amazon.awscdk.services.sqs.Queue;
 
@@ -24,13 +26,20 @@ public class AluraAwsInfraStack extends Stack {
         super(scope, id, props);
 
         Vpc vpc = createVpc();
+        createDatabase(id, vpc);
         Cluster cluster = createCluster(vpc);
         createApplication(cluster);
-        createDatabase(id, vpc);
 
     }
 
     public void createApplication(Cluster cluster) {
+        Map<String, String> envs = new HashMap<>();
+
+        envs.put("SPRING_DATASOURCE_URL", "jdbc:mysql://%s:3306/alurafood-pedidos?createDatabaseIfNotExists=true"
+                        .formatted(Fn.importValue("pedidos-db-endpoint")));
+        envs.put("SPRING_DATASOURCE_USERNAME", "admin");
+        envs.put("SPRING_DATASOURCE_PASSWORD", Fn.importValue("pedidos-db-senha"));
+
         ApplicationLoadBalancedFargateService.Builder.create(this, "AluraJavaMsFargate")
                 .serviceName("alura-service-hello")
                 .cluster(cluster)
@@ -40,9 +49,10 @@ public class AluraAwsInfraStack extends Stack {
                 .assignPublicIp(true)
                 .taskImageOptions(
                         ApplicationLoadBalancedTaskImageOptions.builder()
-                                .image(ContainerImage.fromRegistry("jacquelineoliveira/ola:1.0"))
+                                .image(ContainerImage.fromRegistry("mattmelo/alura-ms-payment"))
                                 .containerPort(8080)
                                 .containerName("app_hello")
+                                .environment(envs)
                                 .build())
                 .memoryLimitMiB(1024)
                 .publicLoadBalancer(true)
