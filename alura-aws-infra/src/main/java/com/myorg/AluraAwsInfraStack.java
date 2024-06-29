@@ -2,12 +2,15 @@ package com.myorg;
 
 import org.jetbrains.annotations.NotNull;
 import software.amazon.awscdk.*;
+import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.ec2.*;
 import software.amazon.awscdk.services.ec2.InstanceType;
-import software.amazon.awscdk.services.ecs.Cluster;
-import software.amazon.awscdk.services.ecs.ContainerImage;
+import software.amazon.awscdk.services.ecr.IRepository;
+import software.amazon.awscdk.services.ecr.Repository;
+import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
+import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.rds.*;
 import software.constructs.Construct;
 
@@ -40,23 +43,49 @@ public class AluraAwsInfraStack extends Stack {
         envs.put("SPRING_DATASOURCE_USERNAME", "admin");
         envs.put("SPRING_DATASOURCE_PASSWORD", Fn.importValue("pedidos-db-senha"));
 
-        ApplicationLoadBalancedFargateService.Builder.create(this, "AluraJavaMsFargate")
+        IRepository repository = Repository.fromRepositoryName(this, "my-repo", "img-pedidos-ms");
+        ApplicationLoadBalancedFargateService build = ApplicationLoadBalancedFargateService.Builder.create(this, "AluraJavaMsFargate")
                 .serviceName("alura-service-hello")
                 .cluster(cluster)
                 .cpu(512)
-                .desiredCount(2)
+                .desiredCount(1)
                 .listenerPort(8080)
                 .assignPublicIp(true)
                 .taskImageOptions(
                         ApplicationLoadBalancedTaskImageOptions.builder()
-                                .image(ContainerImage.fromRegistry("mattmelo/alura-ms-payment"))
+                                .image(ContainerImage.fromEcrRepository(repository))
                                 .containerPort(8080)
                                 .containerName("app_hello")
                                 .environment(envs)
+                                .logDriver(LogDriver.awsLogs(AwsLogDriverProps.builder()
+                                        .logGroup(LogGroup.Builder.create(this, "PedidosMsLogGroup")
+                                                .logGroupName("PedidosMsLog")
+                                                .removalPolicy(RemovalPolicy.DESTROY)
+                                                .build())
+                                        .streamPrefix("PedidosMS")
+                                        .build()))
                                 .build())
                 .memoryLimitMiB(1024)
                 .publicLoadBalancer(true)
                 .build();
+
+        ScalableTaskCount scalableTarget = build.getService().autoScaleTaskCount(EnableScalingProps.builder()
+                .minCapacity(1)
+                .maxCapacity(3)
+                .build());
+
+        scalableTarget.scaleOnCpuUtilization("CpuScaling", CpuUtilizationScalingProps.builder()
+                .targetUtilizationPercent(70)
+                .scaleInCooldown(Duration.minutes(1))
+                .scaleOutCooldown(Duration.minutes(2))
+                .build());
+
+        scalableTarget.scaleOnMemoryUtilization("MemoryScaling", MemoryUtilizationScalingProps.builder()
+                .targetUtilizationPercent(65)
+                .scaleInCooldown(Duration.minutes(1))
+                .scaleOutCooldown(Duration.minutes(2))
+                .build());
+
     }
 
     public Cluster createCluster(Vpc vpc) {
