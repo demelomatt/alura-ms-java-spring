@@ -6,6 +6,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -22,8 +23,11 @@ import java.net.URI;
     @RequestMapping("/pagamentos")
 public class PagamentoController {
 
-    @Autowired
-    private PagamentoService service;
+    private final PagamentoService service;
+
+    public PagamentoController(PagamentoService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public Page<PagamentoDto> listar(@PageableDefault(size = 10) Pageable paginacao) {
