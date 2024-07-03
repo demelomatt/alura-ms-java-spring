@@ -49,10 +49,10 @@ public class PagamentoService {
         Pagamento pagamento = modelMapper.map(dto, Pagamento.class);
         pagamento.setStatus(Status.CRIADO);
         repository.save(pagamento);
+        var pagamentoDto = modelMapper.map(pagamento, PagamentoDto.class);
+        rabbitTemplate.convertAndSend("payment.ex","", pagamentoDto);
+        return pagamentoDto;
 
-        var message = new Message("Payment created with id %s".formatted(pagamento.getId()).getBytes());
-        rabbitTemplate.send("payment.done", message);
-        return modelMapper.map(pagamento, PagamentoDto.class);
     }
 
     public PagamentoDto atualizarPagamento(Long id, PagamentoDto dto) {
