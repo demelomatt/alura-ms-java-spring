@@ -34,6 +34,7 @@ public class AvaliacaoAMQPConfiguration {
     public Queue filaDetalhesAvaliacao() {
         return QueueBuilder
                 .nonDurable("payment.details-rating")
+                .deadLetterExchange("payment.dlx")
                 .build();
     }
 
@@ -45,11 +46,35 @@ public class AvaliacaoAMQPConfiguration {
     }
 
     @Bean
-    public Binding bindPagamentoPedido(FanoutExchange fanoutExchange) {
+    public Binding bindPagamentoPedido() {
         return BindingBuilder
                 .bind(filaDetalhesAvaliacao())
                 .to(fanoutExchange());
     }
+
+
+    @Bean
+    public FanoutExchange deadLetterExchange() {
+        return ExchangeBuilder
+                .fanoutExchange("payment.dlx")
+                .build();
+    }
+
+    @Bean
+    public Queue deadLetterQueue() {
+        return QueueBuilder
+                .nonDurable("payment.details-rating-dql")
+                .build();
+    }
+
+    @Bean
+    public Binding bindDlxPagamentoPedido() {
+        return BindingBuilder
+                .bind(deadLetterQueue())
+                .to(deadLetterExchange());
+    }
+
+
 
     @Bean
     public RabbitAdmin criaRabbitAdmin(ConnectionFactory conn) {
