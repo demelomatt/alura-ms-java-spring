@@ -7,6 +7,8 @@ import br.com.alurafood.pagamentos.model.Status;
 import br.com.alurafood.pagamentos.repository.PagamentoRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.modelmapper.ModelMapper;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,14 +19,18 @@ import java.util.Optional;
 @Service
 public class PagamentoService {
 
-    @Autowired
-    private PagamentoRepository repository;
+    private final PagamentoRepository repository;
+    private final ModelMapper modelMapper;
+    private final PedidoClient pedido;
+    private final RabbitTemplate rabbitTemplate;
 
-    @Autowired
-    private ModelMapper modelMapper;
 
-    @Autowired
-    private PedidoClient pedido;
+    public PagamentoService(PagamentoRepository repository, ModelMapper modelMapper, PedidoClient pedido, RabbitTemplate rabbitTemplate) {
+        this.repository = repository;
+        this.modelMapper = modelMapper;
+        this.pedido = pedido;
+        this.rabbitTemplate = rabbitTemplate;
+    }
 
     public Page<PagamentoDto> obterTodos(Pageable paginacao) {
         return repository
@@ -43,8 +49,10 @@ public class PagamentoService {
         Pagamento pagamento = modelMapper.map(dto, Pagamento.class);
         pagamento.setStatus(Status.CRIADO);
         repository.save(pagamento);
+        var pagamentoDto = modelMapper.map(pagamento, PagamentoDto.class);
+        rabbitTemplate.convertAndSend("payment.ex","", pagamentoDto);
+        return pagamentoDto;
 
-        return modelMapper.map(pagamento, PagamentoDto.class);
     }
 
     public PagamentoDto atualizarPagamento(Long id, PagamentoDto dto) {
